@@ -14,6 +14,7 @@ class LoadData:
     def insert_documents(self, collection_name, docs):
         collection = self.db[collection_name]
         collection.insert_many(docs)
+        
     #TODO 
     def drop_coll(self, collection_name):
         collection = self.db[collection_name]
