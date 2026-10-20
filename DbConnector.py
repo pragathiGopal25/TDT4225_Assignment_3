@@ -14,7 +14,7 @@ class DbConnector:
 
     def __init__(self,
                 DATABASE='movies_db',
-                #  HOST="tdt4225-29.idi.ntnu.no",
+                # HOST="tdt4225-29.idi.ntnu.no",
                 HOST= "localhost:27018",
                 USER="movieDbUser",
                 PASSWORD="movieDb123"):

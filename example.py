@@ -53,9 +53,10 @@ class ExampleProgram:
 
         
     def show_coll(self):
-        collections = self.client['test'].list_collection_names()
+        # collections = self.client['test'].list_collection_names()
+        collections = self.db.list_collection_names()
         print(collections)
-         
+        
 
 
 def main():
@@ -67,7 +68,7 @@ def main():
         program.insert_documents(collection_name="Person")
         program.fetch_documents(collection_name="Person")
         program.drop_coll(collection_name="Person")
-        # program.drop_coll(collection_name='person')
+        program.drop_coll(collection_name='person')
         # program.drop_coll(collection_name='users')
         # Check that the table is dropped
         program.show_coll()
