@@ -200,6 +200,16 @@ class ProcessData:
         self.df = self.df.reset_index(drop=True)
 
         print("Rows after:", len(self.df))
+        
+        #Adding ID connection, movies gets both IDs we can find all relating ratings
+    def add_movie_id(self, links_df):
+        # Exclude links without a valid tmdbId
+        valid_links = links_df.dropna(subset=["tmdbId"])
+
+        # Match Movies id with Links tmdbId to get movieId
+        movie_id_lookup = valid_links.set_index("tmdbId")["movieId"]
+
+        self.df["movie_id"] = self.df["id"].map(movie_id_lookup)
 
 
 def main():
@@ -213,11 +223,14 @@ def main():
     links = ProcessData("archive/links.csv")
     links.refine_links_data()
     links.remove_incorrect_links(movies.df)
+    
+    # Add movie_id to Movies
+    movies.add_movie_id(links.df)
 
     # Ratings
     ratings = ProcessData("archive/ratings_small.csv")
     ratings.refine_ratings_data()
-    
+
     # Credits
     credits = ProcessData("archive/credits.csv")
     credits.refine_credits_data()
