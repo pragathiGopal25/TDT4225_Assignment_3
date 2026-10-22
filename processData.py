@@ -1,49 +1,76 @@
 import pandas as pd
+
+
 class ProcessData:
 
-    def __init__(self, filename):
-        self.df = pd.read_csv(filename, low_memory=False)
+    def __init__(self):
+        self.ratings_dict = {}
+        self.movies_dict = {}
+        self.credits_dict = {}
+        self.links_dict = {}
+        self.parse_files()
 
+    # Read all four CSV files
+    def parse_files(self):
+        self.df_movies = pd.read_csv(
+            "archive/movies_metadata.csv", low_memory=False
+        )
+        self.df_links = pd.read_csv(
+            "archive/links.csv", low_memory=False
+        )
+        self.df_ratings = pd.read_csv(
+            "archive/ratings_small.csv", low_memory=False
+        )
+        self.df_credits = pd.read_csv(
+            "archive/credits.csv", low_memory=False
+        )
+
+    # Store selected columns in dictionaries
+    def set_columns(self, target, df, include=None):
+        for column in include or []:
+            target[column] = df[column]
+
+    # Clean Movies
     def refine_movies_data(self):
         print("\n--- CLEANING MOVIES ---")
-        print("Rows before:", len(self.df))
+        print("Rows before:", len(self.df_movies))
 
         # Remove movies with invalid id
-        self.df["id"] = pd.to_numeric(
-            self.df["id"], errors="coerce"
+        self.df_movies["id"] = pd.to_numeric(
+            self.df_movies["id"], errors="coerce"
         )
-        self.df = self.df.dropna(subset=["id"])
+        self.df_movies = self.df_movies.dropna(subset=["id"])
 
-        # Remove duplicate movies, keeping highest vote count
-        self.df["vote_count"] = pd.to_numeric(
-            self.df["vote_count"], errors="coerce"
+        # Remove duplicate movies, keeping highest vote count. Or do different?
+        self.df_movies["vote_count"] = pd.to_numeric(
+            self.df_movies["vote_count"], errors="coerce"
         )
 
-        self.df = (
-            self.df.sort_values(
+        self.df_movies = (
+            self.df_movies.sort_values(
                 "vote_count", ascending=False, kind="stable"
             )
             .drop_duplicates(subset="id", keep="first")
             .reset_index(drop=True)
         )
 
-        print("Rows after:", len(self.df))
+        print("Rows after:", len(self.df_movies))
 
+    # Handle missing values in Movies
     def handle_missing_values(self):
 
         # Set title to original_title if title is missing
-        self.df["title"] = self.df["title"].fillna(
-            self.df["original_title"]
+        self.df_movies["title"] = self.df_movies["title"].fillna(
+            self.df_movies["original_title"]
         )
 
-        # Set empty text to an empty string
+        # Set missing text to an empty string
         text_columns = ["overview", "tagline"]
 
         for col in text_columns:
-            self.df[col] = self.df[col].fillna("")
+            self.df_movies[col] = self.df_movies[col].fillna("")
 
-        # Replace missing arrays with empty arrays (as strings since the valid arrays are strings)
-        # Make it easier to work with arrays in MongoDB, shows that no genres or companies are registered for the movie
+        # Replace missing arrays with empty arrays as strings
         array_columns = [
             "genres",
             "production_companies",
@@ -51,7 +78,7 @@ class ProcessData:
         ]
 
         for col in array_columns:
-            self.df[col] = self.df[col].fillna("[]")
+            self.df_movies[col] = self.df_movies[col].fillna("[]")
 
         # Convert numeric fields
         numeric_columns = [
@@ -62,178 +89,233 @@ class ProcessData:
         ]
 
         for col in numeric_columns:
-            self.df[col] = pd.to_numeric(
-                self.df[col], errors="coerce"
+            self.df_movies[col] = pd.to_numeric(
+                self.df_movies[col], errors="coerce"
             )
 
-        # Treat runtime = 0 as missing so it doesn't affect calculations
-        self.df.loc[
-            self.df["runtime"] == 0, "runtime"
+        # Treat runtime = 0 as missing
+        self.df_movies.loc[
+            self.df_movies["runtime"] == 0, "runtime"
         ] = float("nan")
 
         # Convert release dates to datetime
-        self.df["release_date"] = pd.to_datetime(
-            self.df["release_date"], errors="coerce"
+        self.df_movies["release_date"] = pd.to_datetime(
+            self.df_movies["release_date"], errors="coerce"
         )
 
+    # Clean Links
     def refine_links_data(self):
         print("\n--- CLEANING LINKS ---")
-        print("Rows before:", len(self.df))
+        print("Rows before:", len(self.df_links))
 
         # Convert IDs to numeric values
         for col in ["movieId", "tmdbId"]:
-            self.df[col] = pd.to_numeric(
-                self.df[col], errors="coerce"
+            self.df_links[col] = pd.to_numeric(
+                self.df_links[col], errors="coerce"
             )
 
         # Remove rows without valid movieId
-        self.df = self.df.dropna(subset=["movieId"])
+        self.df_links = self.df_links.dropna(subset=["movieId"])
 
         # Remove completely identical rows
-        self.df = self.df.drop_duplicates()
+        self.df_links = self.df_links.drop_duplicates()
 
         # Keep movieId unique
-        self.df = (
-            self.df.drop_duplicates(subset="movieId", keep="first")
+        self.df_links = (
+            self.df_links.drop_duplicates(
+                subset="movieId", keep="first"
+            )
             .reset_index(drop=True)
         )
 
-    def remove_incorrect_links(self, movies_df):
+    # Remove incorrect Links mappings
+    def remove_incorrect_links(self):
 
-        # Convert IMDb IDs to comparable numeric values
-        # Since some duplicates have different imdbId
-        self.df["imdbId"] = pd.to_numeric(
-            self.df["imdbId"], errors="coerce"
+        self.df_links["imdbId"] = pd.to_numeric(
+            self.df_links["imdbId"], errors="coerce"
         )
 
         movies_imdb = pd.to_numeric(
-            movies_df["imdb_id"]
+            self.df_movies["imdb_id"]
             .astype("string")
             .str.replace("tt", "", regex=False),
             errors="coerce"
         )
 
-        # Create lookup between TMDB ID and IMDb ID
-        imdb_lookup = dict(zip(movies_df["id"], movies_imdb))
+        # Create lookup between Movies id and imdb_id
+        imdb_lookup = dict(
+            zip(self.df_movies["id"], movies_imdb)
+        )
 
         # Find duplicated tmdbIds
         duplicates = (
-            self.df["tmdbId"].notna()
-            & self.df["tmdbId"].duplicated(keep=False)
+            self.df_links["tmdbId"].notna()
+            & self.df_links["tmdbId"].duplicated(keep=False)
         )
 
-        # Check if IMDb IDs match
-        expected_imdb = self.df["tmdbId"].map(imdb_lookup)
+        # Compare IMDb IDs
+        expected_imdb = self.df_links["tmdbId"].map(imdb_lookup)
 
         incorrect = (
             duplicates
             & expected_imdb.notna()
-            & self.df["imdbId"].notna()
-            & (self.df["imdbId"].fillna(-1) != expected_imdb.fillna(-1))
+            & self.df_links["imdbId"].notna()
+            & (
+                self.df_links["imdbId"].fillna(-1)
+                != expected_imdb.fillna(-1)
+            )
         )
 
         print("Incorrect links removed:", incorrect.sum())
 
-        self.df = self.df.loc[~incorrect].reset_index(drop=True)
+        self.df_links = self.df_links.loc[
+            ~incorrect
+        ].reset_index(drop=True)
 
-        print("Rows after:", len(self.df))
+        print("Rows after:", len(self.df_links))
 
+    # Clean Ratings
     def refine_ratings_data(self):
         print("\n--- CLEANING RATINGS ---")
-        print("Rows before:", len(self.df))
+        print("Rows before:", len(self.df_ratings))
 
-        # Convert identifiers and rating to numeric values
         for col in ["userId", "movieId", "rating"]:
-            self.df[col] = pd.to_numeric(
-                self.df[col], errors="coerce"
+            self.df_ratings[col] = pd.to_numeric(
+                self.df_ratings[col], errors="coerce"
             )
 
-        # Remove rows with invalid required values
-        self.df = self.df.dropna(
+        self.df_ratings = self.df_ratings.dropna(
             subset=["userId", "movieId", "rating"]
         )
 
-        # Check rating range and increments
         valid_rating = (
-            self.df["rating"].between(0.5, 5.0)
-            & (self.df["rating"] * 2 % 1 == 0)
+            self.df_ratings["rating"].between(0.5, 5.0)
+            & (self.df_ratings["rating"] * 2 % 1 == 0)
         )
 
-        # Remove invalid ratings
-        self.df = self.df[valid_rating].copy()
+        self.df_ratings = self.df_ratings[valid_rating].copy()
 
-        # Remove completely identical rows only
-        self.df = self.df.drop_duplicates()
+        self.df_ratings = self.df_ratings.drop_duplicates()
 
-        # Convert timestamp to datetime
-        self.df["timestamp"] = pd.to_datetime(
-            self.df["timestamp"],
+        self.df_ratings["timestamp"] = pd.to_datetime(
+            self.df_ratings["timestamp"],
             unit="s",
             errors="coerce"
         )
 
-        self.df = self.df.reset_index(drop=True)
+        self.df_ratings = self.df_ratings.reset_index(drop=True)
 
-        print("Rows after:", len(self.df))
-        
-        
+        print("Rows after:", len(self.df_ratings))
+
+    # Clean Credits
     def refine_credits_data(self):
         print("\n--- CLEANING CREDITS ---")
-        print("Rows before:", len(self.df))
+        print("Rows before:", len(self.df_credits))
 
-        # Convert id to numeric
-        self.df["id"] = pd.to_numeric(
-            self.df["id"], errors="coerce"
+        self.df_credits["id"] = pd.to_numeric(
+            self.df_credits["id"], errors="coerce"
         )
 
-        # Remove rows with invalid id
-        self.df = self.df.dropna(subset=["id"])
+        self.df_credits = self.df_credits.dropna(subset=["id"])
 
-        # Remove completely identical rows
-        self.df = self.df.drop_duplicates()
-        
-        # Remove duplicate movie IDs (same cast and crew, ignoring order)
-        self.df = self.df.drop_duplicates(
+        self.df_credits = self.df_credits.drop_duplicates()
+
+        self.df_credits = self.df_credits.drop_duplicates(
             subset="id", keep="first"
         )
 
-        self.df = self.df.reset_index(drop=True)
+        self.df_credits = self.df_credits.reset_index(drop=True)
 
-        print("Rows after:", len(self.df))
-        
-        #Adding ID connection, movies gets both IDs we can find all relating ratings
-    def add_movie_id(self, links_df):
+        print("Rows after:", len(self.df_credits))
+
+    # Add movie_id to Movies using Links
+    def add_movie_id(self):
+
         # Exclude links without a valid tmdbId
-        valid_links = links_df.dropna(subset=["tmdbId"])
+        valid_links = self.df_links.dropna(subset=["tmdbId"])
 
-        # Match Movies id with Links tmdbId to get movieId
+        # Match Movies id with Links tmdbId
         movie_id_lookup = valid_links.set_index("tmdbId")["movieId"]
 
-        self.df["movie_id"] = self.df["id"].map(movie_id_lookup)
+        self.df_movies["movie_id"] = self.df_movies["id"].map(
+            movie_id_lookup
+        )
+
+        print(
+            "Missing movie_id:",
+            self.df_movies["movie_id"].isna().sum()
+        )
+        print(
+            "Duplicate movie_id:",
+            self.df_movies["movie_id"].duplicated().sum()
+        )
+
+    # Run preprocessing
+    def run(self):
+
+        # 1. Clean Movies
+        self.refine_movies_data()
+        self.handle_missing_values()
+
+        # 2. Clean Links
+        self.refine_links_data()
+        self.remove_incorrect_links()
+
+        # 3. Add movie_id to Movies
+        self.add_movie_id()
+
+        # 4. Clean Ratings
+        self.refine_ratings_data()
+
+        # 5. Clean Credits
+        self.refine_credits_data()
+
+        # 6. Store selected columns in dictionaries
+
+        self.set_columns(
+            self.links_dict,
+            self.df_links,
+            ["movieId", "tmdbId"]
+        )
+
+        self.set_columns(
+            self.credits_dict,
+            self.df_credits,
+            ["id", "cast", "crew"]
+        )
+
+        self.set_columns(
+            self.ratings_dict,
+            self.df_ratings,
+            ["userId", "movieId", "rating"]
+        )
+
+        self.set_columns(
+            self.movies_dict,
+            self.df_movies,
+            [
+                "id",
+                "movie_id",
+                "title",
+                "release_date",
+                "revenue",
+                "runtime",
+                "vote_average",
+                "vote_count",
+                "original_language",
+                "overview",
+                "tagline",
+                "genres",
+                "production_companies",
+                "production_countries",
+                "belongs_to_collection"
+            ]
+        )
 
 
 def main():
-
-    # Movies
-    movies = ProcessData("archive/movies_metadata.csv")
-    movies.refine_movies_data()
-    movies.handle_missing_values()
-
-    # Links
-    links = ProcessData("archive/links.csv")
-    links.refine_links_data()
-    links.remove_incorrect_links(movies.df)
-    
-    # Add movie_id to Movies
-    movies.add_movie_id(links.df)
-
-    # Ratings
-    ratings = ProcessData("archive/ratings_small.csv")
-    ratings.refine_ratings_data()
-
-    # Credits
-    credits = ProcessData("archive/credits.csv")
-    credits.refine_credits_data()
+    data = ProcessData()
+    data.run()
 
 
 if __name__ == "__main__":
