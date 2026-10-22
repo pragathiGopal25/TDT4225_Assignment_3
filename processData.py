@@ -1,3 +1,4 @@
+import ast
 import pandas as pd
 from pprint import pprint
 
@@ -17,6 +18,22 @@ class ProcessData:
         self.df_credits = pd.read_csv("credits.csv")
         self.df_links = pd.read_csv("links.csv")
         self.df_movies = pd.read_csv("movies_metadata.csv", low_memory=False)
+
+    # Parse strings to lists of dicts (used in cast and crew)
+    def parse_list(self, value, fields):
+        try:
+            items = ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            return []
+
+        if not isinstance(items, list):
+            return []
+
+        return [
+            {field: item.get(field) for field in fields}
+            for item in items
+            if isinstance(item, dict)
+        ]
 
     def set_columns(self, target, df, include=None):
         for column in include or []: 
@@ -122,6 +139,42 @@ class ProcessData:
 
         print("\nTotal movies:", len(df))
 
+    def add_decade(self, df):
+        df["decade"] = (
+            df["release_date"].dt.year // 10 * 10
+        ).astype("Int64")
+
+    def add_cast(self, movies_df, credits_df):
+        cast_fields = ["id", "name", "gender", "order"]
+
+        cast_lookup = dict(zip(
+            credits_df["id"],
+            credits_df["cast"].apply(self.parse_list, fields=cast_fields)
+        ))
+
+        # Map movie ids from credits and movies
+        movies_df["cast"] = movies_df["id"].map(
+            lambda movie_id: cast_lookup.get(movie_id, [])
+        )
+
+    def add_crew(self, movies_df, credits_df):
+        crew_fields = ["id", "name", "job"]
+
+        crew_lookup = dict(zip(
+            credits_df["id"],
+            credits_df["crew"].apply(
+                lambda value: [
+                    member for member in self.parse_list(value, crew_fields)
+                    if member["job"] == "Director"
+                ]
+            )
+        ))
+
+        # Map movie ids from credits and movies
+        movies_df["crew"] = movies_df["id"].map(
+            lambda movie_id: crew_lookup.get(movie_id, [])
+        )
+
     def run(self):
         #TODO:
             # Refine links, credits and ratings 
@@ -139,6 +192,12 @@ class ProcessData:
         # 1. refine data and handle missing values first:
         self.refine_movie_data(self.df_movies)
         self.handle_missing_values(self.df_movies)
+
+        # 2. add decade, cast and crew
+        self.add_decade(self.df_movies)
+        self.add_cast(self.df_movies, self.df_credits)
+        self.add_crew(self.df_movies, self.df_credits)
+
         self.set_columns(self.movies_dict, self.df_movies, [
             "id",
             "title",
@@ -153,7 +212,10 @@ class ProcessData:
             "genres",
             "production_companies",
             "production_countries",
-            "belongs_to_collection"
+            "belongs_to_collection",
+            "decade",
+            "cast",
+            "crew"
         ])
 
 def main():
