@@ -118,7 +118,7 @@ class ProcessData:
         # Convert release dates to datetime
         self.df_movies["release_date"] = pd.to_datetime(
             self.df_movies["release_date"], errors="coerce"
-        )
+        ).dt.strftime("%Y-%m-%d %H:%M:%S")
 
     # Clean Links
     def refine_links_data(self):
@@ -218,7 +218,7 @@ class ProcessData:
             self.df_ratings["timestamp"],
             unit="s",
             errors="coerce"
-        )
+        ).dt.strftime("%Y-%m-%d %H:%M:%S")
 
         self.df_ratings = self.df_ratings.reset_index(drop=True)
 
@@ -269,9 +269,12 @@ class ProcessData:
 
     # Add decade
     def add_decade(self):
-        self.df_movies["decade"] = (
-            self.df_movies["release_date"].dt.year // 10 * 10
-        ).astype("Int64")
+        release_dates = pd.to_datetime(
+            self.df_movies["release_date"], errors="coerce"
+        )
+
+        decade = release_dates.dt.year // 10 * 10
+        self.df_movies["decade"] = [int(d) if pd.notna(d) else None for d in decade] # doesnt convert None values to int
 
     # Add cast
     def add_cast(self):
@@ -379,6 +382,11 @@ class ProcessData:
             ]
         )
 
+    def get_movies_dict(self):
+        return self.movies_dict
+
+    def get_ratings_dict(self):
+        return self.ratings_dict
 
 def main():
     data = ProcessData()
