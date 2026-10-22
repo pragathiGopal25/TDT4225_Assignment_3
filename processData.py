@@ -1,3 +1,4 @@
+import ast
 import pandas as pd
 
 
@@ -24,6 +25,22 @@ class ProcessData:
         self.df_credits = pd.read_csv(
             "archive/credits.csv", low_memory=False
         )
+
+    # Parse strings to lists of dicts (used in cast and crew)
+    def parse_list(self, value, fields):
+        try:
+            items = ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            return []
+
+        if not isinstance(items, list):
+            return []
+
+        return [
+            {field: item.get(field) for field in fields}
+            for item in items
+            if isinstance(item, dict)
+        ]
 
     # Store selected columns in dictionaries
     def set_columns(self, target, df, include=None):
@@ -250,6 +267,48 @@ class ProcessData:
             self.df_movies["movie_id"].duplicated().sum()
         )
 
+    # Add decade
+    def add_decade(self):
+        self.df_movies["decade"] = (
+            self.df_movies["release_date"].dt.year // 10 * 10
+        ).astype("Int64")
+
+    # Add cast
+    def add_cast(self):
+        cast_fields = ["id", "name", "gender", "order"]
+
+        cast_lookup = dict(zip(
+            self.df_credits["id"],
+            self.df_credits["cast"].apply(
+                self.parse_list, fields=cast_fields
+            )
+        ))
+
+        # Map movie ids from credits and movies
+        self.df_movies["cast"] = self.df_movies["id"].map(
+            lambda movie_id: cast_lookup.get(movie_id, [])
+        )
+
+    # Add crew where the job is Director
+    def add_crew(self):
+        crew_fields = ["id", "name", "job"]
+
+        crew_lookup = dict(zip(
+            self.df_credits["id"],
+            self.df_credits["crew"].apply(
+                lambda value: [
+                    member
+                    for member in self.parse_list(value, crew_fields)
+                    if member["job"] == "Director"
+                ]
+            )
+        ))
+
+        # Map movie ids from credits and movies
+        self.df_movies["crew"] = self.df_movies["id"].map(
+            lambda movie_id: crew_lookup.get(movie_id, [])
+        )
+
     # Run preprocessing
     def run(self):
 
@@ -270,7 +329,12 @@ class ProcessData:
         # 5. Clean Credits
         self.refine_credits_data()
 
-        # 6. Store selected columns in dictionaries
+        # 6. Add decade, cast and crew to Movies
+        self.add_decade()
+        self.add_cast()
+        self.add_crew()
+
+        # 7. Store selected columns in dictionaries
 
         self.set_columns(
             self.links_dict,
@@ -308,7 +372,10 @@ class ProcessData:
                 "genres",
                 "production_companies",
                 "production_countries",
-                "belongs_to_collection"
+                "belongs_to_collection",
+                "decade",
+                "cast",
+                "crew"
             ]
         )
 
