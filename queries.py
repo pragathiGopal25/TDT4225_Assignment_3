@@ -138,14 +138,14 @@ class Queries:
 if __name__ == "__main__":
     program = Queries()
 
-    program.question_1()
+    # program.question_1()
     # program.question_2()
     # program.question_3()
     # program.question_4a()
     # program.question_4b()
     # program.question_5()
-    program.question_6()
-    program.question_7()
+    # program.question_6()
+    # program.question_7()
     # program.question_8()
     # program.question_9()
     # program.question_10()
