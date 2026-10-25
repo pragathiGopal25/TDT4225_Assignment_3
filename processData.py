@@ -96,6 +96,10 @@ class ProcessData:
 
         for col in array_columns:
             self.df_movies[col] = self.df_movies[col].fillna("[]")
+            
+        self.df_movies["genres"] = self.df_movies["genres"].apply(
+            self.parse_list, fields=["id", "name"]
+            )
 
         # Convert numeric fields
         numeric_columns = [
@@ -244,6 +248,22 @@ class ProcessData:
         self.df_credits = self.df_credits.reset_index(drop=True)
 
         print("Rows after:", len(self.df_credits))
+        
+    # Remove duplicate actors within each movie
+    def remove_duplicate_actors(self, cast):
+        seen = set()
+        unique_cast = []
+
+        for actor in cast:
+            actor_id = actor.get("id")
+
+            if actor_id in seen:
+                continue
+
+            seen.add(actor_id)
+            unique_cast.append(actor)
+
+        return unique_cast
 
     # Add movie_id to Movies using Links
     def add_movie_id(self):
@@ -275,7 +295,7 @@ class ProcessData:
 
         decade = release_dates.dt.year // 10 * 10
         self.df_movies["decade"] = [int(d) if pd.notna(d) else None for d in decade] # doesnt convert None values to int
-
+          
     # Add cast
     def add_cast(self):
         cast_fields = ["id", "name", "gender", "order"]
@@ -283,7 +303,9 @@ class ProcessData:
         cast_lookup = dict(zip(
             self.df_credits["id"],
             self.df_credits["cast"].apply(
-                self.parse_list, fields=cast_fields
+                lambda value: self.remove_duplicate_actors(
+                    self.parse_list(value, fields=cast_fields)
+                )
             )
         ))
 
