@@ -1,3 +1,4 @@
+from tabulate import tabulate
 
 from DbConnector import DbConnector
 
@@ -5,10 +6,33 @@ from DbConnector import DbConnector
 class Queries:
     def __init__(self):
         self.connection = DbConnector()
-        self.client = self.connection.client
         self.db = self.connection.db
-
-    
+        
+    def question_1(self):
+        pipeline = [
+            {"$match": {"revenue": {"$gt": 0}}},
+            {"$unwind": "$crew"},
+            {"$group": {
+                "_id": "$crew.id",
+                "director": {"$first": "$crew.name"},
+                "movie_count": {"$sum": 1},
+                "median_revenue": {"$median": {"input": "$revenue", "method": "approximate"}},
+                "mean_vote_average": {"$avg": "$vote_average"},
+            }},
+            {"$match": {"movie_count": {"$gte": 5}}},
+            {"$sort": {"median_revenue": -1}},
+            {"$limit": 10},
+            {"$project": {
+                "_id": 0,
+                "director": 1,
+                "movie_count": 1,
+                "median_revenue": 1,
+                "mean_vote_average": {"$round": ["$mean_vote_average", 2]},
+            }},
+        ]
+        rows = list(self.db["Movies"].aggregate(pipeline))
+        print(f"""Question 1: \n\n{tabulate(rows, headers="keys", floatfmt=",.2f")}\n""")
+        
     def question_2(self):
         pipeline = [
             {
@@ -254,16 +278,59 @@ class Queries:
             print(row)
 
     def question_6(self):
-        query = """ """
-        self.db.execute(query)
-        rows = self.db.fetchall()
-        print(f"""Question 6: \n\n{tabulate(rows, headers=self.db.column_names)}\n""")
-    
+        pipeline = [
+            {"$match": {"decade": {"$ne": float("nan")}, "cast": {"$ne": []}}},
+            # movie top-5 billed cast
+            {"$project": {
+                "decade": 1,
+                "known_cast": {"$filter": {
+                    "input": {"$slice": [{"$sortArray": {"input": "$cast", "sortBy": {"order": 1}}}, 5]},
+                    "cond": {"$in": ["$$this.gender", [1, 2]]},
+                }},
+            }},
+            {"$match": {"known_cast": {"$ne": []}}},
+            {"$project": {
+                "decade": 1,
+                "female_proportion": {"$divide": [
+                    {"$size": {"$filter": {"input": "$known_cast", "cond": {"$eq": ["$$this.gender", 1]}}}},
+                    {"$size": "$known_cast"},
+                ]},
+            }},
+            {"$group": {
+                "_id": "$decade",
+                "avg_female_proportion": {"$avg": "$female_proportion"},
+                "movie_count": {"$sum": 1},
+            }},
+            {"$sort": {"avg_female_proportion": -1}},
+            {"$project": {
+                "_id": 0,
+                "decade": {"$concat": [{"$toString": {"$toInt": "$_id"}}, "s"]},
+                "avg_female_proportion": {"$round": ["$avg_female_proportion", 3]},
+                "movie_count": 1,
+            }},
+        ]
+        rows = list(self.db["Movies"].aggregate(pipeline))
+        print(f"""Question 6: \n\n{tabulate(rows, headers="keys")}\n""")
+
     def question_7(self):
-        query =   """ """
-        self.db.execute(query)
-        rows = self.db.fetchall()
-        print(f"""Question 7: \n\n{tabulate(rows, headers=self.db.column_names)}\n""")
+        self.db["Movies"].create_index([("overview", "text"), ("tagline", "text")])
+        pipeline = [
+            {"$match": {
+                "$text": {"$search": "noir"},
+                "vote_count": {"$gte": 50},
+            }},
+            {"$sort": {"vote_average": -1, "vote_count": -1}},
+            {"$limit": 20},
+            {"$project": {
+                "_id": 0,
+                "title": 1,
+                "year": {"$substrCP": ["$release_date", 0, 4]},
+                "vote_average": 1,
+                "vote_count": {"$toInt": "$vote_count"},
+            }},
+        ]
+        rows = list(self.db["Movies"].aggregate(pipeline))
+        print(f"""Question 7: \n\n{tabulate(rows, headers="keys")}\n""")
 
     def question_8(self):
         pipeline = [
@@ -452,11 +519,11 @@ if __name__ == "__main__":
 
     # program.question_1()
     # program.question_2()
-    program.question_3()
-    program.question_4()
+    # program.question_3()
+    # program.question_4()
     # program.question_5()
-    # program.question_6() 
+    # program.question_6()
     # program.question_7()
     # program.question_8()
-    program.question_9()
-    program.question_10()
+    # program.question_9()
+    # program.question_10()
