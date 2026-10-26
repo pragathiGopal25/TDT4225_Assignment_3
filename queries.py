@@ -5,7 +5,7 @@ from DbConnector import DbConnector
 class Queries:
     def __init__(self):
         self.connection = DbConnector()
-        self.cursor = self.connection.cursor
+        self.db = self.connection.db
         
     def question_1(self):
         pipeline = [
