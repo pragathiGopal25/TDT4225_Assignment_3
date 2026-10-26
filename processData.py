@@ -20,7 +20,7 @@ class ProcessData:
             "archive/links.csv", low_memory=False
         )
         self.df_ratings = pd.read_csv(
-            "archive/ratings_small.csv", low_memory=False
+            "archive/ratings.csv", low_memory=False
         )
         self.df_credits = pd.read_csv(
             "archive/credits.csv", low_memory=False
