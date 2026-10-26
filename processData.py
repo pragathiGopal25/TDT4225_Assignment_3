@@ -97,10 +97,6 @@ class ProcessData:
         for col in array_columns:
             self.df_movies[col] = self.df_movies[col].fillna("[]")
             
-        self.df_movies["genres"] = self.df_movies["genres"].apply(
-            self.parse_list, fields=["id", "name"]
-            )
-
         # Convert numeric fields
         numeric_columns = [
             "revenue",
