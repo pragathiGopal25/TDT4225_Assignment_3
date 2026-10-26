@@ -34,14 +34,16 @@ def main():
     ratings_docs = []
 
     # Creating movie JSON document
-    for movie_values, rating_values in zip(zip(*movies_dict.values()), zip(*ratings_dict.values())):
-        # Appending movies 
+    # Creating movie documents
+    for movie_values in zip(*movies_dict.values()):
         movie = dict(zip(movies_dict.keys(), movie_values))
         movies_docs.append(movie)
 
-        # Appending ratings
+    # Creating rating documents
+    for rating_values in zip(*ratings_dict.values()):
         rating = dict(zip(ratings_dict.keys(), rating_values))
         ratings_docs.append(rating)
+
 
     program = None
     try:

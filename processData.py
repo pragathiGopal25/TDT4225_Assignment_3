@@ -96,7 +96,7 @@ class ProcessData:
 
         for col in array_columns:
             self.df_movies[col] = self.df_movies[col].fillna("[]")
-
+            
         # Convert numeric fields
         numeric_columns = [
             "revenue",
@@ -244,6 +244,22 @@ class ProcessData:
         self.df_credits = self.df_credits.reset_index(drop=True)
 
         print("Rows after:", len(self.df_credits))
+        
+    # Remove duplicate actors within each movie
+    def remove_duplicate_actors(self, cast):
+        seen = set()
+        unique_cast = []
+
+        for actor in cast:
+            actor_id = actor.get("id")
+
+            if actor_id in seen:
+                continue
+
+            seen.add(actor_id)
+            unique_cast.append(actor)
+
+        return unique_cast
 
     # Add movie_id to Movies using Links
     def add_movie_id(self):
@@ -275,7 +291,7 @@ class ProcessData:
 
         decade = release_dates.dt.year // 10 * 10
         self.df_movies["decade"] = [int(d) if pd.notna(d) else None for d in decade] # doesnt convert None values to int
-
+          
     # Add cast
     def add_cast(self):
         cast_fields = ["id", "name", "gender", "order"]
@@ -283,7 +299,9 @@ class ProcessData:
         cast_lookup = dict(zip(
             self.df_credits["id"],
             self.df_credits["cast"].apply(
-                self.parse_list, fields=cast_fields
+                lambda value: self.remove_duplicate_actors(
+                    self.parse_list(value, fields=cast_fields)
+                )
             )
         ))
 
@@ -311,6 +329,57 @@ class ProcessData:
         self.df_movies["crew"] = self.df_movies["id"].map(
             lambda movie_id: crew_lookup.get(movie_id, [])
         )
+    
+    # Helper function to convert genres from strings to objects 
+    def add_genres_object(self):
+        genres_fields = ["id", "name"]
+
+        self.df_movies["genres"] = self.df_movies["genres"].apply(
+            lambda value: self.parse_list(value, genres_fields)
+        )
+    
+    # Helper function to convert production companies from strings to objects 
+    def add_prod_companies_object(self):
+        production_comp_fields = ["name", "id"]
+
+        self.df_movies["production_companies"] = self.df_movies["production_companies"].apply(
+            lambda value: self.parse_list(value, production_comp_fields)
+        )
+    
+    # Helper function to convert production countries from strings to objects 
+    def add_prod_countries_object(self):
+        countries_fields = ["iso_3166_1", "name"]
+
+        self.df_movies["production_countries"] = (
+            self.df_movies["production_countries"].apply(
+                lambda value: [
+                    {
+                        "country_code": country["iso_3166_1"],
+                        "name": country["name"]
+                    }
+                    for country in self.parse_list(value, countries_fields)
+                ]
+                if pd.notna(value) else []
+            )
+        )
+    
+    # Helper function to convert production companies from strings to objects 
+    def add_belongs_to_coll_object(self):
+        collection_fields = ["id", "name", "poster_path", "backdrop_path"]
+
+        self.df_movies["belongs_to_collection"] = (
+            self.df_movies["belongs_to_collection"].apply(
+                lambda value: {
+                    key: parsed[key]
+                    for key in collection_fields
+                    if key in parsed
+                }
+                if isinstance(value, str)
+                and isinstance((parsed := ast.literal_eval(value)), dict)
+                else None
+            )
+        )
+    
 
     # Run preprocessing
     def run(self):
@@ -337,7 +406,13 @@ class ProcessData:
         self.add_cast()
         self.add_crew()
 
-        # 7. Store selected columns in dictionaries
+        # 7. Add genre, proudction_company and production_countries objects to movies collection
+        self.add_genres_object()
+        self.add_prod_companies_object()
+        self.add_prod_countries_object()
+        self.add_belongs_to_coll_object()
+
+        # 8. Store selected columns in dictionaries
 
         self.set_columns(
             self.links_dict,
@@ -381,6 +456,7 @@ class ProcessData:
                 "crew"
             ]
         )
+
 
     def get_movies_dict(self):
         return self.movies_dict
