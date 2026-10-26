@@ -333,6 +333,57 @@ class ProcessData:
         self.df_movies["crew"] = self.df_movies["id"].map(
             lambda movie_id: crew_lookup.get(movie_id, [])
         )
+    
+    # Helper function to convert genres from strings to objects 
+    def add_genres_object(self):
+        genres_fields = ["id", "name"]
+
+        self.df_movies["genres"] = self.df_movies["genres"].apply(
+            lambda value: self.parse_list(value, genres_fields)
+        )
+    
+    # Helper function to convert production companies from strings to objects 
+    def add_prod_companies_object(self):
+        production_comp_fields = ["name", "id"]
+
+        self.df_movies["production_companies"] = self.df_movies["production_companies"].apply(
+            lambda value: self.parse_list(value, production_comp_fields)
+        )
+    
+    # Helper function to convert production countries from strings to objects 
+    def add_prod_countries_object(self):
+        countries_fields = ["iso_3166_1", "name"]
+
+        self.df_movies["production_countries"] = (
+            self.df_movies["production_countries"].apply(
+                lambda value: [
+                    {
+                        "country_code": country["iso_3166_1"],
+                        "name": country["name"]
+                    }
+                    for country in self.parse_list(value, countries_fields)
+                ]
+                if pd.notna(value) else []
+            )
+        )
+    
+    # Helper function to convert production companies from strings to objects 
+    def add_belongs_to_coll_object(self):
+        collection_fields = ["id", "name", "poster_path", "backdrop_path"]
+
+        self.df_movies["belongs_to_collection"] = (
+            self.df_movies["belongs_to_collection"].apply(
+                lambda value: {
+                    key: parsed[key]
+                    for key in collection_fields
+                    if key in parsed
+                }
+                if isinstance(value, str)
+                and isinstance((parsed := ast.literal_eval(value)), dict)
+                else None
+            )
+        )
+    
 
     # Run preprocessing
     def run(self):
@@ -359,7 +410,13 @@ class ProcessData:
         self.add_cast()
         self.add_crew()
 
-        # 7. Store selected columns in dictionaries
+        # 7. Add genre, proudction_company and production_countries objects to movies collection
+        self.add_genres_object()
+        self.add_prod_companies_object()
+        self.add_prod_countries_object()
+        self.add_belongs_to_coll_object()
+
+        # 8. Store selected columns in dictionaries
 
         self.set_columns(
             self.links_dict,
@@ -403,6 +460,7 @@ class ProcessData:
                 "crew"
             ]
         )
+
 
     def get_movies_dict(self):
         return self.movies_dict
