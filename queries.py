@@ -469,23 +469,27 @@ class Queries:
 
         print("\nQuestion 10: \n")
 
-        pipeline_base= [
+        pipeline_first= [
+            {"$group": {"_id": "$movieId", "users": {"$addToSet": "$userId"}}},
+
             {
                 "$lookup": {
                     "from": "Movies",
                     "localField": "movieId",
+                    "localField": "_id",
                     "foreignField": "movie_id",
-                    "as": "movies"
+                    "pipeline": [{"$project": {"_id": 0, "genres.name": 1}}],
+                    "as": "m"
                 }
             },
-            {"$unwind": "$movies"},
-            {"$unwind": "$movies.genres"},
+            {"$unwind": "$m"},
+            {"$unwind": "$m.genres"},
+            {"$unwind": "$users"},
 
             {
                 "$group": {
-                    "_id": "$userId",
-                    "genres": {"$addToSet": "$movies.genres.name"},
-                    "rated": {"$addToSet": {"id": "$_id", "rating": "$rating"}},
+                    "_id": "$users",
+                    "genres": {"$addToSet": "$m.genres.name"},
                 }
             },
             {
@@ -493,26 +497,35 @@ class Queries:
                     "_id": 0,
                     "user_id": "$_id",
                     "distinct_genres": {"$size": "$genres"},
-                    "ratings_count": {"$size": "$rated"},
-                    "population_variance": {
-                        "$pow": [{"$stdDevPop": "$rated.rating"}, 2]
-                    },
                 }
             },
-        ]
-
-        pipeline_first = pipeline_base + [
-            {"$sort": {"distinct_genres": -1}},  
+            {"$sort": {"distinct_genres": -1, "user_id": 1}},  
             {"$limit": 10},
         ]
 
         rows = list(self.db.Ratings.aggregate(pipeline_first))
         print(f"""Question 10 (most genre-diverse users): \n\n{tabulate(rows, headers="keys")}\n""")
 
-        pipeline_second = pipeline_base + [
-            {"$match":{"ratings_count": {"$gte": 20}}},
+        
+        pipeline_second = [
+            {
+                "$group": {
+                    "_id": "$userId",
+                    "ratings_count": {"$sum": 1},
+                    "sd": {"$stdDevPop": "$rating"},
+                }
+            },
+            {"$match": {"ratings_count": {"$gte": 20}}},
+
+            {"$project": {
+                "_id": 0,
+                "user_id": "$_id",
+                "ratings_count": 1,
+                "population_variance": {"$pow": ["$sd", 2]},
+            }},
+
             {"$sort": {"population_variance": -1}},
-            {"$limit": 10}
+            {"$limit": 10},
         ]
 
         rows = list(self.db.Ratings.aggregate(pipeline_second))
@@ -521,13 +534,12 @@ class Queries:
 if __name__ == "__main__":
     program = Queries()
 
-    #program.question_1()
-    #program.question_2()
-    #program.question_3()
-    #program.question_4()
-    #program.question_5()
-    #program.question_6()
-    #program.question_7()
-    #program.question_8()
-    #program.question_9()
-    #program.question_10()
+    program.question_1()
+    program.question_3()
+    program.question_4()
+    program.question_5()
+    program.question_6()
+    program.question_7()
+    program.question_8()
+    program.question_9()
+    program.question_10()
