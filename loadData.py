@@ -28,22 +28,14 @@ def main():
     p.run()
 
     movies_dict = p.get_movies_dict()
-    ratings_dict = p.get_ratings_dict()
 
     movies_docs = []
-    ratings_docs = []
 
     # Creating movie JSON document
     # Creating movie documents
     for movie_values in zip(*movies_dict.values()):
         movie = dict(zip(movies_dict.keys(), movie_values))
         movies_docs.append(movie)
-
-    # Creating rating documents
-    for rating_values in zip(*ratings_dict.values()):
-        rating = dict(zip(ratings_dict.keys(), rating_values))
-        ratings_docs.append(rating)
-
 
     program = None
     try:
@@ -56,7 +48,19 @@ def main():
         # Creating ratings collection
         program.create_coll(collection_name="Ratings")
         program.show_coll()
-        program.insert_documents(collection_name="Ratings", docs=ratings_docs)
+        for chunk_number, ratings_docs in enumerate(
+            p.iter_ratings_documents(),
+            start=1
+        ):
+            if ratings_docs:
+                program.insert_documents(
+                    collection_name="Ratings",
+                    docs=ratings_docs
+                )
+            print(
+                f"Inserted ratings chunk {chunk_number} "
+                f"({len(ratings_docs)} documents)"
+            )
         
     except Exception as e:
         print("ERROR: Failed to use database:", e)

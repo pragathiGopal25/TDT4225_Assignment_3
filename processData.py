@@ -3,9 +3,9 @@ import pandas as pd
 
 
 class ProcessData:
+    RATINGS_CHUNK_SIZE = 100_000
 
     def __init__(self):
-        self.ratings_dict = {}
         self.movies_dict = {}
         self.credits_dict = {}
         self.links_dict = {}
@@ -18,9 +18,6 @@ class ProcessData:
         )
         self.df_links = pd.read_csv(
             "archive/links.csv", low_memory=False
-        )
-        self.df_ratings = pd.read_csv(
-            "archive/ratings_small.csv", low_memory=False
         )
         self.df_credits = pd.read_csv(
             "archive/credits.csv", low_memory=False
@@ -144,7 +141,7 @@ class ProcessData:
             )
             .reset_index(drop=True)
         )
-
+ 
     # Remove incorrect Links mappings
     def remove_incorrect_links(self):
 
@@ -192,37 +189,38 @@ class ProcessData:
         print("Rows after:", len(self.df_links))
 
     # Clean Ratings
-    def refine_ratings_data(self):
-        print("\n--- CLEANING RATINGS ---")
-        print("Rows before:", len(self.df_ratings))
-
+    def refine_ratings_data(self, ratings_chunk):
         for col in ["userId", "movieId", "rating"]:
-            self.df_ratings[col] = pd.to_numeric(
-                self.df_ratings[col], errors="coerce"
+            ratings_chunk[col] = pd.to_numeric(
+                ratings_chunk[col], errors="coerce"
             )
 
-        self.df_ratings = self.df_ratings.dropna(
+        ratings_chunk = ratings_chunk.dropna(
             subset=["userId", "movieId", "rating"]
         )
 
         valid_rating = (
-            self.df_ratings["rating"].between(0.5, 5.0)
-            & (self.df_ratings["rating"] * 2 % 1 == 0)
+            ratings_chunk["rating"].between(0.5, 5.0)
+            & (ratings_chunk["rating"] * 2 % 1 == 0)
         )
 
-        self.df_ratings = self.df_ratings[valid_rating].copy()
+        ratings_chunk = ratings_chunk[valid_rating].copy()
+        ratings_chunk = ratings_chunk.drop_duplicates()
 
-        self.df_ratings = self.df_ratings.drop_duplicates()
+        return ratings_chunk.reset_index(drop=True)
 
-        self.df_ratings["timestamp"] = pd.to_datetime(
-            self.df_ratings["timestamp"],
-            unit="s",
-            errors="coerce"
-        ).dt.strftime("%Y-%m-%d %H:%M:%S")
+    def iter_ratings_documents(self):
+        ratings_columns = ["userId", "movieId", "rating", "timestamp"]
 
-        self.df_ratings = self.df_ratings.reset_index(drop=True)
-
-        print("Rows after:", len(self.df_ratings))
+        for ratings_chunk in pd.read_csv(
+            "archive/ratings.csv",
+            usecols=ratings_columns,
+            chunksize=self.RATINGS_CHUNK_SIZE
+        ):
+            ratings_chunk = self.refine_ratings_data(ratings_chunk)
+            yield ratings_chunk[["userId", "movieId", "rating"]].to_dict(
+                orient="records"
+            )
 
     # Clean Credits
     def refine_credits_data(self):
@@ -395,24 +393,21 @@ class ProcessData:
         # 3. Add movie_id to Movies
         self.add_movie_id()
 
-        # 4. Clean Ratings
-        self.refine_ratings_data()
-
-        # 5. Clean Credits
+        # 4. Clean Credits
         self.refine_credits_data()
 
-        # 6. Add decade, cast and crew to Movies
+        # 5. Add decade, cast and crew to Movies
         self.add_decade()
         self.add_cast()
         self.add_crew()
 
-        # 7. Add genre, proudction_company and production_countries objects to movies collection
+        # 6. Add genre, production company and country objects to movies
         self.add_genres_object()
         self.add_prod_companies_object()
         self.add_prod_countries_object()
         self.add_belongs_to_coll_object()
 
-        # 8. Store selected columns in dictionaries
+        # 7. Store selected movie and credit columns
 
         self.set_columns(
             self.links_dict,
@@ -424,12 +419,6 @@ class ProcessData:
             self.credits_dict,
             self.df_credits,
             ["id", "cast", "crew"]
-        )
-
-        self.set_columns(
-            self.ratings_dict,
-            self.df_ratings,
-            ["userId", "movieId", "rating"]
         )
 
         self.set_columns(
@@ -460,9 +449,6 @@ class ProcessData:
 
     def get_movies_dict(self):
         return self.movies_dict
-
-    def get_ratings_dict(self):
-        return self.ratings_dict
 
 def main():
     data = ProcessData()

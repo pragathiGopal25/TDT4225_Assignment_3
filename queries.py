@@ -136,18 +136,24 @@ class Queries:
                     "_id.actor1": 1,
                     "_id.actor2": 1
                 }
+            },
+            {"$limit": 20},
+            {
+                "$project": {
+                    "_id": 0,
+                    "actor1_name": 1,
+                    "actor2_name": 1,
+                    "co_appearances": 1,
+                    "average_vote": 1
+                }
             }
         ]
 
-        results = self.db["Movies"].aggregate(
+        rows = list(self.db["Movies"].aggregate(
             pipeline,
             allowDiskUse=True
-        )
-
-        print("Question 2:\n")
-
-        for row in results:
-            print(row)
+        ))
+        print(f"""Question 2: \n\n{tabulate(rows, headers="keys")}\n""")
             
    
     def question_3(self):
@@ -178,9 +184,7 @@ class Queries:
         ]
 
         rows = list(self.db.Movies.aggregate(pipeline))
-
-        for row in rows:
-            print(row)
+        print(f"""Question 3: \n\n{tabulate(rows, headers="keys")}\n""")
     
     def question_4(self):
 
@@ -224,9 +228,7 @@ class Queries:
         ]
 
         rows = list(self.db.Movies.aggregate(pipeline))
-
-        for row in rows:
-            print(row)
+        print(f"""Question 4: \n\n{tabulate(rows, headers="keys")}\n""")
         
         
     def question_5(self):
@@ -268,14 +270,20 @@ class Queries:
                     "_id.decade": 1,
                     "median_runtime": -1
                 }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "decade": "$_id.decade",
+                    "primary_genre": "$_id.primary_genre",
+                    "median_runtime": "$median_runtime",
+                    "movie_count": "$movie_count"
+                }
             }
         ]
 
-        results = self.db["Movies"].aggregate(pipeline + [{"$limit": 40}])
-
-        print("Question 5:\n")
-        for row in results:
-            print(row)
+        rows = list(self.db["Movies"].aggregate(pipeline + [{"$limit": 40}]))
+        print(f"""Question 5: \n\n{tabulate(rows, headers="keys")}\n""")
 
     def question_6(self):
         pipeline = [
@@ -403,18 +411,24 @@ class Queries:
             },
             {
                 "$limit": 20
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "director_name": 1,
+                    "actor_name": 1,
+                    "films_count": 1,
+                    "average_vote": 1,
+                    "mean_revenue": 1
+                }
             }
         ]
 
-        results = self.db["Movies"].aggregate(
+        rows = list(self.db["Movies"].aggregate(
             pipeline,
             allowDiskUse=True
-        )
-
-        print("Question 8:\n")
-
-        for row in results:
-            print(row)
+        ))
+        print(f"""Question 8: \n\n{tabulate(rows, headers="keys")}\n""")
     
     def question_9(self):
         print("\nQuestion 9: \n")
@@ -447,9 +461,7 @@ class Queries:
         ]
 
         rows = list(self.db.Movies.aggregate(pipeline))
-
-        for row in rows:
-            print(row)
+        print(f"""Question 9: \n\n{tabulate(rows, headers="keys")}\n""")
 
     def question_10(self):
         # Creating an index so it is easier to iterate through movie_ids.
@@ -457,7 +469,6 @@ class Queries:
 
         print("\nQuestion 10: \n")
 
-        print("Top 10 most genre-diverse users. \n")
         pipeline_base= [
             {
                 "$lookup": {
@@ -496,13 +507,8 @@ class Queries:
         ]
 
         rows = list(self.db.Ratings.aggregate(pipeline_first))
+        print(f"""Question 10 (most genre-diverse users): \n\n{tabulate(rows, headers="keys")}\n""")
 
-        for row in rows:
-            print(row)
-
-
-        print("\nTop 10 highest-variance users (only users with ≥ 20 ratings). \n")
-        
         pipeline_second = pipeline_base + [
             {"$match":{"ratings_count": {"$gte": 20}}},
             {"$sort": {"population_variance": -1}},
@@ -510,20 +516,18 @@ class Queries:
         ]
 
         rows = list(self.db.Ratings.aggregate(pipeline_second))
-
-        for row in rows:
-            print(row)
+        print(f"""Question 10 (highest variance, at least 20 ratings): \n\n{tabulate(rows, headers="keys")}\n""")
 
 if __name__ == "__main__":
     program = Queries()
 
-    # program.question_1()
-    # program.question_2()
-    # program.question_3()
-    # program.question_4()
-    # program.question_5()
-    # program.question_6()
-    # program.question_7()
-    # program.question_8()
-    # program.question_9()
-    # program.question_10()
+    #program.question_1()
+    #program.question_2()
+    #program.question_3()
+    #program.question_4()
+    #program.question_5()
+    #program.question_6()
+    #program.question_7()
+    #program.question_8()
+    #program.question_9()
+    #program.question_10()
