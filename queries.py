@@ -267,7 +267,7 @@ class Queries:
             },
             {
                 "$sort": {
-                    "_id.decade": 1,
+                    "_id.decade": -1,
                     "median_runtime": -1
                 }
             },
